@@ -1,17 +1,68 @@
 require('ggplot2')
+require('Rtsne')
+
+# check clustereval
+
 ##############################################################################
-## Generate distance matrix from pca data
+## filter RNA-Seq counts
 ##############################################################################
-pcaDist <- function(pca, method='euclidean' , pc=c(1,2)) {
+filterRNACounts <- function(tpm, exp, reads=400000, genes=2000, mintpm=10,
+  minratio=0.1, minsample=5) {
+  # Read in data
+  message('Reading TPM count file')
+  tpmMatrix = read.table(tpm)
+  message('Reading expected count file')
+  expMatrix = read.table(exp)
+  # Extract samples with sufficient aligned reads and expressed genes
+  acceptedSamples <- colnames(expMatrix)[
+    colSums(expMatrix) >= reads &
+      apply(expMatrix, 2, function(z) {sum(z > 0)}) >= genes
+    ]
+  message(paste(length(acceptedSamples), 'of', ncol(tpmMatrix),
+      'sample accepted'))
+  # Calculate number of samples in which a gene must be expresed
+  sampleNo <- ceiling(max(minsample, length(acceptedSamples) * minratio))
+  message(paste('Finding Genes expressed in >=', sampleNo, 'samples'))
+  # Extract accepted genes
+  acceptedGenes <- row.names(tpmMatrix)[
+    apply(
+      tpmMatrix[,acceptedSamples], 1, function(z) {sum(z >= mintpm)}
+    ) >= sampleNo
+  ]
+  message(paste(length(acceptedGenes), 'of', nrow(tpmMatrix), 'accepted'))
+  # Extract and return filtered counts
+  filteredTPM <- tpmMatrix[acceptedGenes,acceptedSamples]
+  return(filteredTPM)
+}
+
+##############################################################################
+## Perform PCA
+##############################################################################
+performPCA <- function(tpm, log=T) {
+  # Manipulate data
+  if (log) {
+    tpm <- t(log2(tpm+1))
+  } else {
+    tpm <- t(tpm)
+  }
+  # Perform PCA and return data
+  pca <- prcomp(tpm)
+  return(pca)
+}
+
+##############################################################################
+## Generate euclidean distance matrix from pca data
+##############################################################################
+pcaDist <- function(pca, pc=c(1,2)) {
   pcData <- pca$x[,pc]
-  dist <- dist(pcData, method=method)
+  dist <- dist(pcData, method='euclidean')
   return(dist)
 }
 
 ##############################################################################
 ## Check concordane between pca data and group data
 ##############################################################################
-checkGroups <- function(pca, groups) {
+checkPCAGroups <- function(pca, groups) {
   # Check group data is character class
   if (!is.character(groups)) {
     stop('"groups" must be a character vector') 
@@ -32,11 +83,13 @@ checkGroups <- function(pca, groups) {
 ##############################################################################
 ## Function to plot pca data
 ##############################################################################
-plotPCA <- function(pca, outFile, groups=NA) {
+plotPCA <- function(pca, outFile, groups=NULL) {
   # Extract pca data as data frame
   pcDF <- as.data.frame(pca$x)
   # Check concordance between PC data and groups if supplied
-  groups <- checkGroups(pca, groups)
+  if (!is.null(groups)) {
+    groups <- checkPCAGroups(pca, groups)
+  }
   # Extract variance data
   varRatio <- (pca$sdev^2) / sum(pca$sdev^2)
   varDF <- data.frame(
@@ -84,6 +137,36 @@ plotPCA <- function(pca, outFile, groups=NA) {
   }
   dev.off()
 }
+
+##############################################################################
+## Cluster PCA data
+##############################################################################
+clustPCA <- function(pca, pc=c(1:2), groups=NULL) {
+  # Extract pca data as data frame
+  pcDF <- as.data.frame(pca$x)
+  # Check concordance between PC data and groups if supplied
+  if (!is.null(groups)) {
+    groups <- checkGroups(pca, groups)
+  }
+  # Create distance matrix
+  pcaDist <- dist(pcDF[,pc])
+  # 
+}
+
+##############################################################################
+## Plot tsne of multiple principal components
+##############################################################################
+tsnePlot <- function(pca, pc=c(1,2), perplexity = 10, groups=NULL) {
+  # Check concordance between PC data and groups if supplied
+  if (!is.null(groups)) {
+    groups <- checkGroups(pca, groups)
+  }
+  # Perform tsne
+  pcad <- pcaDist(pca, pc=pc)
+  tsneData <- Rtsne(pcad, theta=0, perplexity=perplexity,  pca=F)
+  plot(tsneData$Y)
+}
+tsnePlot(pcaData)
 
 
 p <- pcaDist(pcaData)

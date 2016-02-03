@@ -7,34 +7,11 @@ require(ggplot2)
 # Set values for analysis
 tpmFile = '/farm/scratch/rs-bio-lif/rabino01/bonet/singleCell576Analysis/sc_gene.tpm'
 expFile = '/farm/scratch/rs-bio-lif/rabino01/bonet/singleCell576Analysis/sc_gene.exp'
-minAligned = 4e5
-minExpressed = 2e3
-minTPM = 10
-minTPMCount = 5
-kRange <- 2:10
-# Read in data
-tpmMatrix = read.table(tpmFile)
-expMatrix = read.table(expFile)
 # Extract accpeted samples
-acceptedSamples <- colnames(expMatrix)[
-  colSums(expMatrix) >= minAligned &
-  apply(expMatrix, 2, function(z) {sum(z > 0)}) >= minExpressed
-]
-# Extract accepted genes
-acceptedGenes <- row.names(tpmMatrix)[
-  apply(
-    tpmMatrix[,acceptedSamples],
-    1,
-    function(z) {
-      sum(z >= minTPM)
-    }
-  ) >= minTPMCount
-]
-# Extract tpm counts
-filteredTPM <- tpmMatrix[acceptedGenes,acceptedSamples]
-# Generate dissimilarity matrix
-processDist <- function(tm, outFile) {
-  sampleNames = colnames(tm)
+filteredTPM <- filterRNACounts(tpm = tpmFile, exp = expFile, minratio=0.25)
+# 
+plotChoiceK <- function(di, outFile) {
+  # Calculate distance
   tmDist <- dist(t(tm))
   # Find jaccard simmilarity values for range of k
   outJaccard <- data.frame()
@@ -75,10 +52,16 @@ processDist <- function(tm, outFile) {
   # Plot contribution of each cell type to cluster
   for (k in kRange) {
     clID <- paste0('k',k)
-    p <- ggplot(outCluster, aes_string(clID, fill='celltype')) +
-      geom_bar(aes(fill=celltype)) +
+    p <- ggplot(outCluster, aes_string(clID)) +
       theme(axis.text=element_text(size=16),
-        axis.title=element_text(size=18,face="bold")) 
+        axis.title=element_text(size=18,face="bold"))
+    # Add groups data if supplied
+    if (is.null(groups)) {
+      p <- p + geom_bar(aes(fill=groups))
+    } else {
+      geom_bar(aes(fill=celltype))
+    }
+    # Print plot
     print(p)
   }
   dev.off()
