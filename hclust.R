@@ -1,140 +1,128 @@
-# Load required packages
-require(ggplot2)
-require(ggdendro)
-require(amap)
-require(pheatmap)
-require
-# Create function to draw dendrogram
-filterTPM <- filterRNACounts(tpm=tpmFile, exp=expFile, minratio=0.2)
-log2Filter <- log2(filterTPM + 1)
-dlog2 <- dist(t(log2Filter))
-hc <- hclust(dlog2)
-plot(hc, label=F)
-
-
-
-# Calculate groups
-groups <- gsub('^S\\d\\.(P\\d).*?$','\\1',colnames(filterTPM))
-names(groups) <- colnames(filterTPM)
-# Create distance object
-pcaData <- performPCA(filterTPM, log=T)
-plotPCA(pcaData, outFile = '/home/rabino01/test.pdf', groups=groups)
-
+require(snow)
 
 ##############################################################################
-## Create distance
+## Calculate distcance of count matrix
 ##############################################################################
-calcDist <- function(tpm, dmethod='euclidean', log=T) {
+count2Dist <- function(tpm, method='euclidean', log=T) {
   if (log) {
     tpm = t(log2(tpm + 1))
   } else {
     tpm = t(tpm)
   }
-  d <- Dist(tpm, method=dmethod)
+  d <- dist(tpm, method=method)
+  return(d)
 }
 
 ##############################################################################
-## Check groups for tpm matrices
+## Perform hierachical clustering on count matrix
 ##############################################################################
-checkGroups <- function(tpm, groups) {
-  # Check group data is character class
-  if (!is.character(groups)) {
-    stop('"groups" must be a character vector') 
-  }
-  # Check group variable name length
-  gname = sort(names(groups))
-  pname = sort(colnames(tpm))
-  # Check group variable length
-  if (!identical(gname,pname)) {
-    stop('Group names and sample names are not identical')
-  }
-  # Reorder group, turn to factor and return
-  groups <- groups[colnames(tpm)]
-  groups <- factor(groups, levels = unique(groups))
-  return(groups)
-} 
-
-##############################################################################
-## Calculate robustness of clusters for varying k
-##############################################################################
-plotHClustK <- function(tpm, outfile, groups=NULL, dmethod='euclidean',
-  krange=2:10) {
-  # Check groups if supplied
-  if (!is.null(groups)) {
-    groups <- checkGroups(tpm, groups)
-  }
+count2hclust <- function(tpm, dmethod='euclidean', cmethod='complete', log=T) {
   # Calculate distance
-  tpmDist <- calcDist(tpm, dmethod=dmethod)
-  # Create variables to store data
-  outJaccard <- data.frame()
-  outCluster <- data.frame(row.names = colnames(tpm))
-  # Loop through k and extract data
-  for (k in krange) {
-    clb <- clusterboot(
-      tpmDist,
-      bootmethod = 'boot',
-      B = 100,
-      distances = T,
-      multipleboot = F,
-      clustermethod = kmeansCBI,
-      k = k,
-      seed = 1979
-    )
-    jaccard <- rowMeans(clb$bootresult)
-    jaccardDF <- data.frame(
-      k = rep(k, k),
-      jaccard = jaccard
-    )
-    outJaccard <- rbind(outJaccard, jaccardDF)
-    outCluster[,paste0('k',k)] <- as.factor(clb$partition)
-  }
-  outJaccard$k <- as.factor(outJaccard$k)
-  # Plot heatmap
-  pdf(outfile, onefile = T, paper='a4r', width=9, height=7)
-  pheatmap(tpmDist)
-  # Create theme
-  t <- theme(
-    axis.text=element_text(size=16),
-    axis.title=element_text(size=18,face="bold"),
-    legend.text=element_text(size=16),
-    legend.title=element_text(size=16)
-  ) 
-  # Plot jaccard similarities
-  p <- ggplot(outJaccard, aes(x=k, y = jaccard)) +
-    geom_hline(aes(yintercept = c(0.5,0.75)), col = c('red','green')) +
-    geom_point(shape = 20, size = 8) +
-    ylim(0,1) + 
-    stat_summary(fun.y=mean, geom="point", color="blue", shape = 20, size = 8) +
-    t
-  print(p)
-  # Plot contribution of each cell type to cluster
-  for (k in krange) {
+  d <- count2Dist(tpm, method=dmethod, log=log)
+  # Find clusters and return
+  hc <- hclust(d, method=cmethod)
+  return(hc)
+}
+
+##############################################################################
+## Plot dendro with groups
+##############################################################################
+plotGroupDendro <- function(hc, groups) {
+  # convert hclust object to dendrogram and order  groups
+  dend <- as.dendrogram(hc)
+  groups <- checkGroups(labels(dend), groups)
+  # Calculate y-limits for plot
+  ylim <- c(min(hc$height), max(hc$height))
+  # Create colours for plots 
+  colours <- scales::hue_pal(h = c(0, 360) + 15, c = 100, l = 65,
+    h.start = 0, direction = 1)
+  # Create plots for each groups
+  for (i in 1:length(groups)) {
+    # Extract group data
+    groupName <- names(groups)[i]
+    groupFactor <- groups[[i]]
+    # Convert groups to numeric and generate colours
+    groupLevels <- as.numeric(groupFactor)
+    colVector = colours(max(groupLevels))
+    # Format dendrogram
+    groupColours <- colVector[groupLevels]
+    dend <- branches_color(dend, clusters=groupLevels)
+    dend <- hang.dendrogram(dend, 0.1)
     # Create plot
-    clID <- paste0('k',k)
-    p <- ggplot(outCluster, aes_string(clID)) +
-      t
-    # Add group data
-    if (!is.null(groups)) {
-      p <- p + geom_bar(aes(fill=groups))
-    } else {
-      p <- p + geom_bar()
-    }
-    # Print
-    print(p)
+    plot(
+      dend,
+      ylim=ylim,
+      xlab=paste('Distance:', hc$dist.method),
+      sub=paste('Cluster:', hc$method),
+      bty='l',
+      leaflab='none'
+    )
+    legend(
+      'topright',
+      legend = levels(groupFactor),
+      col=colVector,
+      lty=1,
+      lwd=3,
+      title=groupName
+    )
   }
-  # Close file
-  dev.off()
 }
 
-
-
-plotDendro <- function(d) {
-  hc <- hclust(d)
-  dhc <- as.dendrogram(hc)
-  ddata <- dendro_data(dhc, type = "rectangle")
-  p <- ggplot(segment(ddata)) + 
-    geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) + 
-    coord_flip() + 
-    scale_y_reverse(expand = c(0.2, 0))
-  p
+##############################################################################
+## Perform pvclust
+##############################################################################
+clusterConfidence <- function(tpm, dmethod='euclidean', cmethod='complete',
+  log=T, nboot=100, threads=2) {
+  # Convert to log if required
+  if (log) {
+    tpm = log2(tpm +1)
+  }
+  # Create cluster
+  cl <- makeCluster(threads, type='SOCK')
+  # Perform pvclust
+  pv.tpm <- pvclust(
+    tpm,
+    method.hclust = cmethod,
+    method.dist = dmethod,
+    nboot = nboot, 
+    parallel = cl
+  )
+  # stop cluster
+  stopCluster(cl)
+  # Return results
+  return(pv.tpm)
 }
+
+##############################################################################
+## Plot pvclust
+##############################################################################
+plotPVClust <- function(pvcData, alpha=0.95) {
+  plot(
+    pvcData$hclust,
+    labels = F,
+    xlab = paste('Distance:', pvcData$hclust$dist.method),
+    sub = paste('Clustering:', pvcData$hclust$method),
+    main = 'Raw Clusters'
+  )
+  plot(
+    pvcData,
+    labels = F,
+    xlab = paste('Distance:', pvcData$hclust$dist.method),
+    sub = paste('Clustering:', pvcData$hclust$method),
+    main = 'Cluster P-Value'
+  )
+  plot(
+    pvcData$hclust,
+    labels = F,
+    xlab = paste('Distance:', pvcData$hclust$dist.method),
+    sub = paste('Clustering:', pvcData$hclust$method),
+    main = paste('Cluster P-Value >=', alpha)
+  )
+  pvrect(pvcData, alpha=alpha)
+}
+
+##############################################################################
+## Complete cluster analysis
+##############################################################################
+
+

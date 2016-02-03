@@ -1,41 +1,6 @@
-# Empty workspace
-rm(list=ls())
-# Load packages
-require(ggplot2)
-require(pheatmap)
-require(fpc)
-require(ggplot2)
-require(Rtsne)
-# Set values for analysis
-tpmFile = '/farm/scratch/rs-bio-lif/rabino01/bonet/singleCell576Analysis/sc_gene.tpm'
-expFile = '/farm/scratch/rs-bio-lif/rabino01/bonet/singleCell576Analysis/sc_gene.exp'
-minAligned = 4e5
-minExpressed = 2e3
-minTPM = 10
-minTPMCount = 5
-kRange <- 2:10
-# Read in data
-tpmMatrix = read.table(tpmFile)
-expMatrix = read.table(expFile)
-# Extract accpeted samples
-acceptedSamples <- colnames(expMatrix)[
-  colSums(expMatrix) >= minAligned &
-    apply(expMatrix, 2, function(z) {sum(z > 0)}) >= minExpressed
-  ]
-# Extract accepted genes
-acceptedGenes <- row.names(tpmMatrix)[
-  apply(
-    tpmMatrix[,acceptedSamples],
-    1,
-    function(z) {
-      sum(z >= minTPM)
-    }
-  ) >= minTPMCount
-  ]
-# Extract tpm counts
-filteredTPM <- tpmMatrix[acceptedGenes,acceptedSamples]
-# Log data
-log2TPM <- t(log2(filteredTPM + 1))
+##############################################################################
+## Plot kmeans clsutering
+##############################################################################
 # Create function to cluster pca analysis
 kmeans2DGroups <- function(X, outFile, krange=2:10, groups=NULL, seed=1) {
   # Check for dimensionality and rename columns
@@ -122,16 +87,3 @@ kmeans2DGroups <- function(X, outFile, krange=2:10, groups=NULL, seed=1) {
   }
   dev.off()
 }
-# Perform tsne
-tsneData <- Rtsne(
-  X = log2TPM,
-  dims = 2,
-  pca = FALSE,
-  theta = 0.1,
-  perplexity = 10
-)
-kmeans2DGroups()
-# Perform pca analysis
-pcaData <- prcomp(log2TPM)
-# 
-
