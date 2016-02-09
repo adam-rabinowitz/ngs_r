@@ -4,7 +4,7 @@ require('Rtsne')
 ##############################################################################
 ## Perform PCA
 ##############################################################################
-performPCA <- function(tpm, log=T) {
+pcaReduce <- function(tpm, log=T) {
   # Manipulate data
   if (log) {
     tpm <- t(log2(tpm+1))
@@ -19,7 +19,7 @@ performPCA <- function(tpm, log=T) {
 ##############################################################################
 ## Generate distance matrix from pca data
 ##############################################################################
-pcaDist <- function(pca, dmethod='euclidean' pc=c(1,2)) {
+pcaDist <- function(pca, dmethod='euclidean', pc=c(1,2)) {
   pcData <- pca$x[,pc]
   dist <- dist(pcData, method=dmethod)
   return(dist)
@@ -28,13 +28,11 @@ pcaDist <- function(pca, dmethod='euclidean' pc=c(1,2)) {
 ##############################################################################
 ## Function to plot pca data
 ##############################################################################
-plotPCA <- function(pca, groups=NULL) {
+pcaPlot <- function(pca, groups=NULL, pc=1:2) {
   # Check concordance between PC data and groups if supplied
-  print(names(groups))
   if (!is.null(groups)) {
     groups <- checkGroups(row.names(pca$x), groups)
   }
-  print(names(groups))
   # Extract variance data
   varRatio <- (pca$sdev^2) / sum(pca$sdev^2)
   varDF <- data.frame(
@@ -55,6 +53,7 @@ plotPCA <- function(pca, groups=NULL) {
     xlab('Principal Component') +
     ylab('Proportion Of Variance') +
     ylim(0,max(varDF$VAR)) +
+    ggtitle('PCA - PC Variance Contribution') +
     thm
   print(p)
   # Create PC1 vs PC2 plot
@@ -64,65 +63,49 @@ plotPCA <- function(pca, groups=NULL) {
       groupName = names(groups)[i]
       groupFactor = groups[[i]]
       # Assemble plot data
-      plotDF <- as.data.frame(pca$x)[,1:2]
+      plotDF <- as.data.frame(pca$x)[,pc]
       plotDF[,groupName] <- groupFactor
-      # Create plot
+      # Create plot for first two componets
       fig <- ggplot(plotDF, aes_string(x = 'PC1', y = 'PC2', color=groupName)) +
         geom_point() +
         thm +
-        ggtitle('PCA Analysis - PC1 vs PC2')
-      # Print plot and remove
+        ggtitle('PCA - PC1 vs PC2')
       print(fig)
-      rm(fig)
-    }
-  } else {
-    # Assemble plot data
-    plotDF <- as.data.frame(pca$x)[,1:2]
-    p <- ggplot(plotDFDF, aes(x = PC1, y = PC2)) +
-      thm +
-      geom_point() +
-      ggtitle('PCA Analysis - PC1 vs PC2')
-    print(p)
-  }
-  # Create density plot for top principal components
-  for (PCn in paste0('PC',1:10)) {
-    # Create plots with group data
-    if (is.list(groups)) {
-      for (i in 1:length(groups)) {
-        # Extract group data
-        groupName = names(groups)[i]
-        groupFactor = groups[[i]]
-        # Create plot data
-        plotDF <- as.data.frame(pca$x[,PCn])
-        colnames(plotDF) <- PCn
-        plotDF[,groupName] = groupFactor
+      # Add combined plot data
+      plotDFalt <- plotDF
+      plotDFalt[,groupName] = 'All'
+      plotDF <- rbind(plotDFalt, plotDF)
+      # Plot distribution of principal componets
+      for (PCn in paste0('PC',pc)) {
         # Create plot
         fig <- ggplot(plotDF, aes_string(x = PCn, color=groupName)) +
           thm +
           geom_density() +
-          ggtitle(paste(PCn, 'Distribution')) +
+          ggtitle(paste('PCA -', PCn, 'Distribution')) +
           ylab('Density')
         print(fig)
-        rm(fig)
       }
-    # Create plots without groups data
-    } else {
-      for (i in 1:length(groups)) {
-        # Create plot
-        p <- ggplot(pcDF, aes_string(x = PCn)) +
-          thm +
-          geom_density() +
-          ggtitle(paste(PCn, 'Distribution')) +
-          ylab('Density')
-        print(p)
-      }
+    }
+  } else {
+    # Assemble plot data
+    plotDF <- as.data.frame(pca$x)[,pc]
+    fig <- ggplot(plotDF, aes(x = PC1, y = PC2)) +
+      thm +
+      geom_point() +
+      ggtitle('PCA Analysis - PC1 vs PC2')
+    print(fig)
+    # Plot distribution for prncipal components
+    for (PCn in paste0('PC',pc)) {
+      # Create plot
+      fig <- ggplot(plotDF, aes_string(x = PCn)) +
+        thm +
+        geom_density() +
+        ggtitle(paste('PCA -', PCn, 'Distribution')) +
+        ylab('Density')
+      print(fig)
     }
   }
 }
-
-pdf('/home/adam/test.pdf',onefile=T,paper='a4r')
-plotPCA(pca, groups)
-dev.off()
 
 ##############################################################################
 ## Cluster PCA data
