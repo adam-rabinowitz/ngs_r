@@ -3,31 +3,35 @@
 ##############################################################################
 filterRNACounts <- function(tpm, exp, reads=400000, genes=2000, mintpm=10,
   minratio=0.1, minsample=5) {
-  # Read in data
-  message('Reading TPM count file')
-  tpmMatrix = read.table(tpm, sep='\t', header=T, row.names=1)
-  message('Reading expected count file')
-  expMatrix = read.table(exp, sep='\t', header=T, row.names=1)
+  # Read in data if files supplied
+  if (is.character(tpm)) {
+    message('Reading TPM count file')
+    tpm = read.table(tpm, sep='\t', header=T, row.names=1)
+  }
+  if (is.character(exp)) {
+    message('Reading expected count file')
+    exp = read.table(exp, sep='\t', header=T, row.names=1)
+  }
   # Extract samples with sufficient aligned reads and expressed genes
-  acceptedSamples <- colnames(expMatrix)[
-    colSums(expMatrix) >= reads &
-      apply(expMatrix, 2, function(z) {sum(z > 0)}) >= genes
+  acceptedSamples <- colnames(exp)[
+    colSums(exp) >= reads &
+      apply(exp, 2, function(z) {sum(z > 0)}) >= genes
     ]
-  message(paste(length(acceptedSamples), 'of', ncol(tpmMatrix),
+  message(paste(length(acceptedSamples), 'of', ncol(tpm),
     'samples accepted'))
   # Calculate number of samples in which a gene must be expresed
   sampleNo <- ceiling(max(minsample, length(acceptedSamples) * minratio))
   message(paste('Finding Genes expressed in >=', sampleNo, 'samples'))
   # Extract accepted genes
-  acceptedGenes <- row.names(tpmMatrix)[
+  acceptedGenes <- row.names(tpm)[
     apply(
-      tpmMatrix[,acceptedSamples], 1, function(z) {sum(z >= mintpm)}
+      tpm[,acceptedSamples], 1, function(z) {sum(z >= mintpm)}
     ) >= sampleNo
     ]
-  message(paste(length(acceptedGenes), 'of', nrow(tpmMatrix),
+  message(paste(length(acceptedGenes), 'of', nrow(tpm),
     'genes accepted'))
-  # Extract and return filtered counts
-  filteredTPM <- tpmMatrix[acceptedGenes,acceptedSamples]
+  # Extract and return filtered counts as matrix
+  filteredTPM <- tpm[acceptedGenes,acceptedSamples]
   filteredTPM <- as.matrix(filteredTPM)
   return(filteredTPM)
 }
@@ -41,7 +45,7 @@ checkGroups <- function(samples, groups) {
   # Loop through group list
   lapply(groups, function(g) {
     # Check groups are character vectors
-    if (!is.character(g) & !is.factor(g)) {
+    if (!is.character(g) & !is.factor(g) & !is.numeric(g)) {
       stop('groups must be a list of character vectors') 
     }
     # Check group names are identical to sample names
