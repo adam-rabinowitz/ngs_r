@@ -1,6 +1,8 @@
 require(fpc)
+source('~/github/ngs_r/ggplot/plotThemes.R')
+
 ##############################################################################
-## Plot kmeans clsutering
+## Extract clusters and their stability scores for different values of K
 ##############################################################################
 # Create method to help determine kmeans clustering
 kmeansKChoice <- function(X, krange=2:10, seed=1) {
@@ -37,7 +39,7 @@ kmeansKChoice <- function(X, krange=2:10, seed=1) {
     )
     # Add jaccard values to output
     jaccardDF <- data.frame(
-      k = rep(paste0('k',k), k),
+      k = rep(k, k),
       cluster = 1:k,
       jaccard = clb$bootmean
     )
@@ -54,7 +56,10 @@ kmeansKChoice <- function(X, krange=2:10, seed=1) {
   return(outList)
 }
 
-kmeansKChoicePlot <- function(X, outpdf) {
+##############################################################################
+## Plot kmeans data and cluster stability
+##############################################################################
+kmeansChoicePlot <- function(X, outpdf) {
   # Extract plot data
   plotData <- cbind(X$coordinates, X$clusters)
   # Open pdf
@@ -63,11 +68,12 @@ kmeansKChoicePlot <- function(X, outpdf) {
   for (clust in colnames(X$clusters)) {
     print(clust)
     # extract value of k
-    jValues <- subset(X$jaccard, k == clust)
+    kValue <- as.numeric(substr(clust,2,10))
+    jValues <- subset(X$jaccard, k == kValue)
     jValues <- jValues[order(jValues$cluster),]
     jValues$jaccard <- round(jValues$jaccard, 2)
     # Extract jaccard cluster values
-    kplot <- ggplot(
+    p <- ggplot(
       plotData,
       aes_string('x', 'y', color = clust)
     ) +
@@ -77,13 +83,53 @@ kmeansKChoicePlot <- function(X, outpdf) {
       name = 'Cluster\nJaccard',
       labels = paste(
         jValues$cluster,
-        jValues$jaccard,
+        sprintf('%.2f', jValues$jaccard),
         sep = ' - '
       )
-    )
-    print(kplot)
+    ) +
+    pdfA4SquareTheme
+    print(p)
   }
   dev.off()
 }
+
+##############################################################################
+## Plot how supplied groupings are places in clusters
+##############################################################################
+kmeansGroupPlot <- function(X, groups, outpdf) {
+  # Extract plot data
+  plotData <- cbind(X$coordinates, X$clusters)
+  # Add groups to plot data
+  if (!identical(names(groups), row.names(plotData))) {
+    stop('group names do not match kmeans data')
+  }
+  plotData$group <- as.factor(groups)
+  # Open pdf
+  pdf(file = outpdf, paper = 'a4r', width = 8, height =7, onefile = T)
+  # Create scatter plot
+  p <- ggplot(
+    plotData,
+    aes_string('x', 'y', color = 'group')
+  ) +
+    geom_point() +
+    ggtitle('Group Distribution') +
+    pdfA4SquareTheme
+  print(p)
+  # Loop through clusters
+  print('clust')
+  for (clust in colnames(X$clusters)) {
+    # Create plot
+    p <- ggplot(
+      plotData,
+      aes_string(clust, fill = 'group')
+    ) +
+    geom_bar() +
+    ggtitle(clust) +
+    pdfA4SquareTheme
+    print(p)
+  }
+  dev.off()
+}
+
 
 
