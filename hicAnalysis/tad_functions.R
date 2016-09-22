@@ -5,122 +5,57 @@ require(IRanges)
 require(zoo)
 
 ###############################################################################
-## Functions to calculate log2 ratio
-###############################################################################
-# Calculates mean log2 ratio of pairs
-log2_pair_calc <- function(
-  upstream_prob, downstream_prob 
-) {
-  log2_values <- log2(upstream_prob / downstream_prob)
-  log2_mean <- mean(log2_values)
-  return(log2_mean)
-}
-# Calculates log2 ratio of sum of probabilities
-log2_sum_calc <- function(
-  upstream_prob, downstream_prob 
-) {
-  return(log2(sum(upstream_prob) / sum(downstream_prob)))
-}
-
-###############################################################################
-## Function to calculate log2 data
-###############################################################################
-calc_log2_direction <- function(
-    norm_matrix, log2_function, max_window_no, min_window_no
-  ) {
-  # Remove zero values
-  norm_matrix[norm_matrix == 0] <- NA
-  # Calculate bin number and generate output variable
-  number_bins <- ncol(norm_matrix)
-  log2_out <- rep(NA, number_bins)
-  # Loop through bins
-  for (index in 1:number_bins) {
-    # Calculate window size for statistic
-    actual_window_no <- min(index - 1, number_bins - index - 1, max_window_no)
-    if (actual_window_no < min_window_no) {
-      next
-    }
-    # Extract upstream and downstream probabilities
-    upstream_indices <- (index - actual_window_no) : (index - 1)
-    upstream_prob <- rev(norm_matrix[upstream_indices, index])
-    downstream_indices <- (index + 1) : (index + actual_window_no)
-    downstream_prob <- norm_matrix[downstream_indices, index]
-    # Calculate accpetable indices
-    acceptable_indices <- !(is.na(upstream_prob) | is.na(downstream_prob))
-    if (sum(acceptable_indices) < min_window_no) {
-      next
-    }
-    # Extract accpetable probabilities and calculate log2 value
-    upstream_prob <- upstream_prob[acceptable_indices]
-    downstream_prob <- downstream_prob[acceptable_indices]
-    log2_ratio <- log2_function(upstream_prob, downstream_prob)
-    log2_out[index] <- log2_ratio
-  }
-  # Create and return output data frame
-  out_df <- as.data.frame(
-    do.call(rbind, strsplit(colnames(norm_data), '[:-]')),
-    stringsAsFactors = F
-  )
-  colnames(out_df) <- c('chrom', 'start', 'end')
-  out_df$start <- as.numeric(out_df$start)
-  out_df$end <- as.numeric(out_df$end)
-  out_df$log2 <- log2_out
-  row.names(out_df) <- colnames(norm_matrix)
-  return(out_df)
-}
-
-###############################################################################
 ## Window shift detection of tad
 ###############################################################################
-find_tad_window <- function(log2_data, half_window = 3, na.rm = T) {
+find.tad.window <- function(log2.data, half.window = 3, na.rm = T) {
   # Create empty data frame for output
   output <- data.frame()
   # Loop through windows
-  for(index in 1:(nrow(log2_data) - half_window)) {
+  for(index in 1:(nrow(log2.data) - half.window)) {
     # Extract data for upstream bins
-    up_indices <- index : (index -1 + half_window)
-    up_data <- log2_data[up_indices,]
-    if (all(is.na(up_data$log2))) {
+    up.indices <- index : (index - 1 + half.window)
+    up.data <- log2.data[up.indices,]
+    if (all(is.na(up.data$log2))) {
       next
     }
     # Extract max log2 value for upstream bins
-    max_log2 <- max(up_data$log2, na.rm = na.rm)
-    if (is.na(max_log2)) {
+    max.log2 <- max(up.data$log2, na.rm = na.rm)
+    if (is.na(max.log2)) {
       next
     }
     # Extract data for max log2 value
-    max_indices <- which(up_data$log2 == max_log2)
-    up_data_max <- up_data[tail(max_indices, 1),]
+    max.indices <- which(up.data$log2 == max.log2)
+    up.data.max <- up.data[tail(max.indices, 1),]
     # Extract data and min log2 for downstream bins
-    down_indices <- (index + half_window) : (index + (2 * half_window) - 1)
-    down_data <- log2_data[down_indices,]
-    if (all(is.na(down_data$log2))) {
+    down.indices <- (index + half.window) : (index + (2 * half.window) - 1)
+    down.data <- log2.data[down.indices,]
+    if (all(is.na(down.data$log2))) {
       next
     }
     # Extract min log2 value for downstream bins
-    min_log2 <- min(down_data$log2, na.rm = na.rm)
-    if (is.na(min_log2)) {
+    min.log2 <- min(down.data$log2, na.rm = na.rm)
+    if (is.na(min.log2)) {
       next
     }
     # Extract data for min log2 value
-    min_indices <- which(down_data$log2 == min_log2)
-    down_data_min <- down_data[head(min_indices, 1),]
+    min.indices <- which(down.data$log2 == min.log2)
+    down.data.min <- down.data[head(min.indices, 1),]
     # Calculate switch values and skip if negative
-    log2_switch <- up_data_max$log2 - down_data_min$log2
-    if (log2_switch < 0) {
+    log2.switch <- up.data.max$log2 - down.data.min$log2
+    if (log2.switch < 0) {
       next
     }
     # Create and append dataframe for output
-    tad_window <- data.frame(
-      'chr' = up_data_max$chr,
-      'start' = up_data_max$start,
-      'end' = down_data_min$end,
-      'centre' = (up_data_max$start + down_data_min$end) / 2,
-      'max' = up_data_max$log2,
-      'min' = down_data_min$log2,
-      'shift' = up_data_max$log2 - down_data_min$log2
+    tad.window <- data.frame(
+      'chr' = up.data.max$chr,
+      'start' = up.data.max$start,
+      'end' = down.data.min$end,
+      'centre' = (up.data.max$start + down.data.min$end) / 2,
+      'max' = up.data.max$log2,
+      'min' = down.data.min$log2,
+      'shift' = up.data.max$log2 - down.data.min$log2
     )
-    output <- rbind(output, tad_window)
+    output <- rbind(output, tad.window)
   }
   # Filter and order output
   output <- output[order(-output$shift),]
@@ -130,23 +65,35 @@ find_tad_window <- function(log2_data, half_window = 3, na.rm = T) {
 ###############################################################################
 ## Funcion to filter tads identified through window search
 ###############################################################################
-filter_tad <- function(tad_data, min_shift = 0) {
+filter.tad.window <- function(tad.data, min.shift = 0) {
   # Order and filter data by shift
-  tad_data <- tad_data[order(-tad_data$shift),]
-  tad_data <- subset(tad_data, tad_data$shift >= min_shift)
+  tad.data <- tad.data[order(-tad.data$shift),]
+  tad.data <- subset(tad.data, tad.data$shift >= min.shift)
   # Build iranges object and find overlaps
-  tad_ranges <- IRanges(tad_data$start, tad_data$end)
-  tad_overlaps <- findOverlaps(tad_ranges, tad_ranges)
+  tad.ranges <- IRanges(tad.data$start, tad.data$end)
+  tad.overlaps <- findOverlaps(tad.ranges, tad.ranges)
   # Find intervals overlapping higher shift intervals
-  lower_shift_overlaps <- subjectHits(tad_overlaps) > queryHits(tad_overlaps)
-  remove_rows <- subjectHits(tad_overlaps)[lower_shift_overlaps]
-  remove_rows <- unique(remove_rows)
-  remove_rows <- remove_rows[order(remove_rows)]
+  lower.shift.overlaps <- subjectHits(tad.overlaps) > queryHits(tad.overlaps)
+  remove.rows <- subjectHits(tad.overlaps)[lower.shift.overlaps]
+  remove.rows <- unique(remove.rows)
+  remove.rows <- remove.rows[order(remove.rows)]
   # Remove unwanted intervals and return data
-  tad_data <- tad_data[-remove_rows,]
-  rownames(tad_data) <- 1:nrow(tad_data)
-  return(tad_data)
+  tad.data <- tad.data[-remove.rows,]
+  rownames(tad.data) <- 1:nrow(tad.data)
+  return(tad.data)
 }
+
+###############################################################################
+## Function to find and filter tads
+###############################################################################
+find.filter.tad.window <- function(
+  log2.data, half.window = 3, min.shift=0, na.rm = T
+) {
+  tad.data <- find.tad.window(log2.data, half.window, na.rm)
+  tad.filtered <- filter.tad.window(tad.data, min.shift)
+  return(tad.filtered)
+}
+
 
 ###############################################################################
 ## Function to create plot
@@ -305,7 +252,7 @@ extract_squares <- function(
     data_matrix[data_matrix == 0] <- NA
   }
   # Check object is square
-  dimensions <- dim(data_matrix)
+  dimensions <- dim(dhalf_window = 3, na.rm = Tata_matrix)
   if (dimensions[1] != dimensions[2]) {
     stop('matrix not square')
   }
@@ -524,7 +471,31 @@ tad_overlap_pvalue <- function(
   return(density(overlap.dist))
 }
 
-
+###############################################################################
+## Function to plot tads
+###############################################################################
+plot.tads <- function(tad.list, sample.data) {
+  # Sort tad.list bu condition
+  sample.data <- sample.data[order(sample.data$condition),]
+  tad.list <- tad.list[sample.data$sample]
+  plot.data <- data.frame()
+  for (sample in names(tad.list)) {
+    sample.tad <- tad.list[[sample]]
+    sample.index <- match(sample, sample.data$sample)
+    sample.df <- data.frame(
+      sample = sample,
+      condition = sample.data$condition[sample.index],
+      centre = sample.tad$centre,
+      shift = sample.tad$shift
+    )
+    plot.data <- rbind(plot.data, sample.df)
+  }
+  plot <- ggplot(
+    plot.data, 
+    aes(x=centre, y=sample, colour=condition)
+  ) + geom_point()
+  return(plot)
+}
 
 
 
