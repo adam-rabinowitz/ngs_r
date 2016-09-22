@@ -1,5 +1,5 @@
 require(fpc)
-source('~/github/ngs_r/ggplot/plotThemes.R')
+source('/farm/home/rabino01/github/ngs_r/ggplot/plotThemes.R')
 
 ##############################################################################
 ## Extract clusters and their stability scores for different values of K
@@ -30,7 +30,7 @@ kmeansKChoice <- function(X, krange=2:10, seed=1) {
     clb <- clusterboot(
       eDist,
       bootmethod = 'boot',
-      B = 100,
+      B = 1000,
       distances = T,
       multipleboot = F,
       clustermethod = kmeansCBI,
@@ -62,8 +62,15 @@ kmeansKChoice <- function(X, krange=2:10, seed=1) {
 kmeansChoicePlot <- function(X, outpdf) {
   # Extract plot data
   plotData <- cbind(X$coordinates, X$clusters)
-  # Open pdf
+  # Open pdf and create unclustered plot
   pdf(file = outpdf, paper = 'a4r', width = 8, height =7, onefile = T)
+  p <- ggplot(
+    plotData,
+    aes_string('x', 'y')
+  ) +
+    geom_point() +
+    pdfA4SquareTheme
+  print(p)
   # Loop through clusters
   for (clust in colnames(X$clusters)) {
     print(clust)
