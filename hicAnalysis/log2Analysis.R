@@ -1,17 +1,63 @@
-require(tsne)
+require('ggplot2')
+require('ggdendro')
+require('reshape2')
 
+###############################################################################
+## Generate plot for log2 clustering
+###############################################################################
+log2.clustering.plot <- function(log2.data, sample.data) {
+  # Perform clustetring
+  trim.data <- log2.data[,6:ncol(log2.data)]
+  log2.hclust <- hclust(dist(t(trim.data)))
+  # Extract dendrogram data
+  dd <- as.dendrogram(log2.hclust)
+  ddata <- dendro_data(dd)
+  # Extract condition for each sample
+  sample.match <- match(
+    as.character(ddata_x$labels$label),
+    as.character(sample.data$sample)
+  )
+  conditions <- as.character(sample.data$condition)[sample.match]
+  # Create dendrogram
+  plot <- ggplot(segment(ddata_x)) +
+    geom_segment(aes(x=x, y=y, xend=xend, yend=yend)) +
+    theme(
+      axis.title=element_blank(),
+      axis.text=element_blank(),
+      axis.ticks=element_blank(),
+      panel.grid=element_blank()
+    ) +
+    ggtitle('Clustering of euclidean distance between log2 vectors') +
+    geom_text(
+      data=label(ddata_x),
+      aes(label=label, x=x, y=0, colour=conditions, vjust=1.5, xpd=T)
+    )
+  # Return plot
+  return(plot)
+}
 
-
-
-data <- read.table('~/test.df', header=T, sep='\t', check.names=F)
-log2Data <- na.omit(data[,6:ncol(data)])
-sampleData <- read.table('~/yasuMatrices/sample_data.txt', header=T, sep='\t')
-
-
-log2Clustering <- function(log2Data) {
-  trimData <- log2Data[,6:ncol(log2Data)]
-  log2Dist <- dist(t(trimData))
-  plot(hclust(log2Dist))
+###############################################################################
+## Generate plot for variance distribution
+###############################################################################
+log2.density.plot <- function(log2.data, sample.data) {
+  # Perform clustetring
+  trim.data <- as.matrix(log2.data[,6:ncol(log2.data)])
+  trim.data <- na.omit(trim.data)
+  # Extract data for each condition
+  condition.list <- split(sample.data$sample, sample.data$condition)
+  log2.list <- lapply(condition.list, function(z) {
+    c(trim.data[,as.character(z)])
+  })
+  # Create plot
+  plot.data <- do.call(cbind, log2.list)
+  plot.data <- melt(plot.data)
+  colnames(plot.data) <- c('_','Condition','Log2')
+  # Create plot and return
+  plot <- ggplot(plot.data, aes(x=Log2, colour=Condition)) +
+    geom_density() +
+    scale_x_continuous(limits=c(-1,1)) +
+    ggtitle('Distribution of log2 values')
+  return(plot)
 }
 
 ###############################################################################
@@ -98,7 +144,7 @@ deltaVarianceTest <- function(v1, v2, iterations=10000, seed=1234) {
   }
   # Calculate p.value
   extreme <- abs(deltaVarResample) >= abs(deltaVar)
-  pValue <- sum(extreme) / iterations
+  pValue <- max((sum(extreme) / iterations), (1 / iterations)) 
   # Create plot
   plot(density(deltaVarResample))
   abline(v=deltaVar)
@@ -108,6 +154,11 @@ deltaVarianceTest <- function(v1, v2, iterations=10000, seed=1234) {
   output$'pvalue' = pValue
   return(output)
 }
+
+###############################################################################
+## Compare variance across clusters
+###############################################################################
+
 
 ###############################################################################
 ## Function to extract sample names grouped by condition
@@ -135,8 +186,6 @@ extractConditionLog2 <- function(log2Data, sampleData) {
   output <- data.frame(do.call(cbind, output))
   return(output)
 }
-conditionLog2 <- extractConditionLog2(log2Data, sampleData)
-deltaVarianceTest(conditionLog2$Mitosis.AuB, conditionLog2$Mitosis)
 
 ###############################################################################
 ## Function to extract tad boundaries
@@ -159,66 +208,11 @@ splitLog2RegionSample <- function(log2Data) {
   return(regionSampleList)
 }
 
-###############################################################################
-## Function to calculate jaccard similarity scores across samples
-###############################################################################
-calculate.jaccard <- function(value.list) {
-  output <- matrix(
-    ncol=length(value.list),
-    nrow=length(value.list),
-    dimnames=list(
-      names(value.list),
-      names(value.list)  
-    )
-  )
-  output['NGS-8179','NGS-8179'] <- 1
-  combinations <- expand.grid(names(value.list), names(value.list))
-  for (i in 1:nrow(combinations)) {
-    sample1 <- combinations[i,1]
-    sample2 <- combinations[i,2]
-    values1 <- value.list[[sample1]]
-    values2 <- value.list[[sample2]]
-    intersectNo <- length(intersect(values1, values2))
-    totalNo <- length(values1) + length(values2)
-    jaccard <- intersectNo / (totalNo - intersectNo)
-    output[sample1, sample2] <- jaccard
-  }
-  return(output)
-}
 
-###############################################################################
-## Function to calculate mean jaccard similarity scores across conditions
-###############################################################################
-mean.jaccard.similarity <- function(jaccard.matrix, sample.data) {
-  # Check row and column names and remove diagonal
-  if (!all.equal(colnames(jaccard.matrix), row.names(jaccard.matrix))) {
-    stop('Row and column names must match')
-  }
-  diag(jaccard.matrix) <- NA
-  # Extract conditions and generate output matrix
-  conditions <- split(sample.data$sample, sample.data$condition)
-  output <- matrix(
-    ncol=length(conditions),
-    nrow=length(conditions),
-    dimnames=list(
-      names(conditions),
-      names(conditions)  
-    )
-  )
-  # Fill output matrix and return
-  combinations <- expand.grid(names(conditions), names(conditions))
-  for (i in 1:nrow(combinations)) {
-    condition1 <- combinations[i,1]
-    condition2 <- combinations[i,2]
-    samples1 <- as.character(conditions[[condition1]])
-    samples2 <- as.character(conditions[[condition2]])
-    subMatrix <- jaccard.matrix[samples1, samples2]
-    print(samples1)
-    print(samples2)
-    print(subMatrix)
-    subMatrixMean <- mean(c(subMatrix), na.rm=T)
-    print(subMatrixMean)
-    output[condition1,condition2] <- subMatrixMean
-  }
-  return(output)
-}
+
+
+
+
+
+
+
