@@ -14,12 +14,12 @@ log2.clustering.plot <- function(log2.data, sample.data) {
   ddata <- dendro_data(dd)
   # Extract condition for each sample
   sample.match <- match(
-    as.character(ddata_x$labels$label),
+    as.character(ddata$labels$label),
     as.character(sample.data$sample)
   )
   conditions <- as.character(sample.data$condition)[sample.match]
   # Create dendrogram
-  plot <- ggplot(segment(ddata_x)) +
+  plot <- ggplot(segment(ddata)) +
     geom_segment(aes(x=x, y=y, xend=xend, yend=yend)) +
     theme(
       axis.title=element_blank(),
@@ -29,7 +29,7 @@ log2.clustering.plot <- function(log2.data, sample.data) {
     ) +
     ggtitle('Clustering of euclidean distance between log2 vectors') +
     geom_text(
-      data=label(ddata_x),
+      data=label(ddata),
       aes(label=label, x=x, y=0, colour=conditions, vjust=1.5, xpd=T)
     )
   # Return plot
@@ -144,21 +144,60 @@ deltaVarianceTest <- function(v1, v2, iterations=10000, seed=1234) {
   }
   # Calculate p.value
   extreme <- abs(deltaVarResample) >= abs(deltaVar)
-  pValue <- max((sum(extreme) / iterations), (1 / iterations)) 
-  # Create plot
-  plot(density(deltaVarResample))
-  abline(v=deltaVar)
+  pValue <- max((sum(extreme) / iterations), (3 / iterations)) 
+  # Create and return output
   output = list()
   output$'var1' = var(v1)
   output$'var2' = var(v2)
   output$'pvalue' = pValue
   return(output)
 }
-
 ###############################################################################
 ## Compare variance across clusters
 ###############################################################################
-
+createVarPvalueMatrix <- function(
+  log2.data, sample.data, iterations = 10000, seed=1234
+) {
+  # Trim log2 data and check names
+  trim.log2 <- as.matrix(log2.data[,6:ncol(log2.data)])
+  trim.log2 <- na.omit(trim.log2)
+  # Check sample names
+  if (!all.equal(
+      sort(colnames(trim.log2)),
+      as.character(sort(sample.data$sample))
+  )) {
+    stop('Samples in log2.data and sample.data differ')
+  }
+  # Extract combinations and create outputs
+  conditions <- as.character(unique(sample.data$condition))
+  outVector <- numeric(length=length(conditions))
+  names(outVector) <- conditions
+  combinations <- combn(conditions, 2)
+  outMatrix <- matrix(
+    nrow=length(conditions),
+    ncol=length(conditions),
+    dimnames=list(conditions, conditions)
+  )
+  diag(outMatrix) <- 1
+  for (i in 1:ncol(combinations)) {
+    con.1 <- combinations[1,i]
+    con.2 <- combinations[2,i]
+    samples.1 <- as.character(
+      sample.data$sample[sample.data$condition == con.1])
+    samples.2 <- as.character(
+      sample.data$sample[sample.data$condition == con.2])
+    log2.1 <- c(trim.log2[,samples.1])
+    log2.2 <- c(trim.log2[,samples.2])
+    pvalueData <- deltaVarianceTest(
+      log2.1, log2.2, iterations=iterations, seed=seed)
+    outMatrix[con.1, con.2] <- pvalueData$pvalue
+    outMatrix[con.2, con.1] <- pvalueData$pvalue
+    outVector[con.1] = pvalueData$var1
+    outVector[con.2] = pvalueData$var2
+  }
+  output = list('variance' = outVector, 'pvalue' = outMatrix)
+  return(output)
+}
 
 ###############################################################################
 ## Function to extract sample names grouped by condition
