@@ -122,6 +122,7 @@ create_prob_plot <- function(
   plot_data[is.na(plot_data)] <- min_prob
   plot_data[plot_data < min_prob] <- min_prob
   plot_data[plot_data > max_prob] <- max_prob
+  plot_data <- as.matrix(plot_data)
   plot_data <- melt(plot_data)
   # Create plot
   p <- ggplot(plot_data, aes(x = Var1, y = Var2, fill = value)) +
@@ -317,7 +318,7 @@ extract_square_metrics <- function(matrix_list, span = 0.75, half_window = 15) {
 ###############################################################################
 ## Function to filter minima 
 ###############################################################################
-filter_square_metrics <- function(minima, half_window = 15) {
+filter_square_metrics <- function(minima, half_window = 16) {
   # Remove non-minima bins
   filter_minima <- square_metrics[
     which((square_metrics$up_slope - square_metrics$down_slope) == -2),
@@ -496,10 +497,3 @@ plot.tads <- function(tad.list, sample.data) {
   ) + geom_point()
   return(plot)
 }
-
-
-
-
-
-  
-  
