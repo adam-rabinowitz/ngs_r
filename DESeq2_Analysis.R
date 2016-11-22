@@ -39,8 +39,8 @@ sampleData <- read.table(opt$sampleData, sep = '\t', header = T,
   row.names = 1, check.names = F)
 sampleData$condition <- factor(sampleData$condition,
   levels=unique(sampleData$condition))
-sampleData$replicate <- factor(sampleData$replicate,
-  levels=unique(sampleData$replicate))
+sampleData$replicate <- factor(as.character(sampleData$replicate),
+  levels=unique(as.character(sampleData$replicate)))
 # Read expected count file
 expData <- read.table(opt$expData, sep = '\t', row.names = 1,
   header = T, check.names = 'F')
@@ -171,13 +171,19 @@ extractResults  <- function(DESeqObject, prefix = opt$outPrefix) {
   # Extract and sort counts
   countData <- as.data.frame(counts(DESeqObject, normalized=T))
   countData <- countData[resultData$gene,]
+  # Add alternative gene names and reorder
+  if (!is.na(opt$altName)) {
+    countData$altname <- nameData[row.names(countData)]
+    countData <- countData[,c(ncol(countData),1:(ncol(countData)-1))]
+  }
+  # Add gene names to dataframe and reorder
   countData$gene <- row.names(countData)
   countData <- countData[,c(ncol(countData),1:(ncol(countData)-1))]
   # Save results data
-  write.table(resultData, file = paste0(prefix,'.results'), sep = '\t',
+  write.table(resultData, file = paste0(prefix,'.results.txt'), sep = '\t',
     quote = F, col.names = T, row.names = F)
   # Save count data
-  write.table(countData, file = paste0(prefix,'.counts'), sep = '\t',
+  write.table(countData, file = paste0(prefix,'.counts.txt'), sep = '\t',
     quote = F, col.names = T, row.names = F)
 }
 # Store results and count data
